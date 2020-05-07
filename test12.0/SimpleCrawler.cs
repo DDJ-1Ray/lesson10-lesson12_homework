@@ -13,59 +13,78 @@ namespace test12._0
 {
     class SimpleCrawler
     {
-        public Hashtable urls;
+        private Hashtable urls = new Hashtable();
         private int count = 0;
-        public event Action<string> PageDownloaded;
-
-
+        public event Action<SimpleCrawler> CrawlerStopped;
+        public event Action<SimpleCrawler, string> PageDownloaded;
+        private Queue<string> pending = new Queue<string>();
+        private readonly string urlDetectRegex = @"(href|HREF)\s*=\s*[""'](?<url>[^""'#>]+)[""']";
+        public static readonly string urlParseRegex = @"^(?<site>https?://(?<host>[\w\d.]+)(:\d+)?($|/))([\w\d]+/)*(?<file>[^#?]*)";
         //static void Main(string[] args)
         //{
+
+        public string HostFilter { get; set; }
+        public string FileFilter { get; set; }
+        public int MaxPage { get; set; }
+        public string StartURL { get; set; }
+        public Encoding HtmlEncoding { get; set; }
+        public Hashtable DownloadedPages { get => urls; }
+
         //    SimpleCrawler myCrawler = new SimpleCrawler();
-        private string startUrl;
-        //    //string try1 = "../archive/2010/11/02/1867406.html";
-        public void Start()
+        public SimpleCrawler()
         {
-            
+            MaxPage = 100;
+            HtmlEncoding = Encoding.UTF8;
         }
+        //    //string try1 = "../archive/2010/11/02/1867406.html";
+
         //    //Console.WriteLine(change(try1, startUrl));
         //    if (args.Length >= 1) startUrl = args[0];
         //    myCrawler.urls.Add(startUrl, false);//加入初始页面
         //    new Thread(() => myCrawler.Crawl(startUrl)).Start();
         //}
-        public string StartUrl
-        {
-            get=>startUrl;
-            set
-            {
-                StartUrl = value;
-                urls = new Hashtable();
-                urls.Add(value, false);
-            }
-        }
-        public  void Crawl()
-        {
+
+      
+            
             //Console.WriteLine("開始爬行了.... ");
-            while (true)
+            //List<Task> tasks = new List<Task>();
+            //while (tasks.Count < MaxPage && pending.Count > 0)
+            //{
+            //    string url = pending.Dequeue();
+            //    Task task = Task.Run(() => Start(url));
+            //    tasks.Add(task);
+            //}
+            ////Task.WaitAll(tasks.ToArray());
+            //CrawlerStopped(this);
+
+           
+        public void Start()
+        {
+            urls.Clear();
+            pending.Clear();
+            pending.Enqueue(StartURL);
+            count = 0;
+            List<Task> tasks = new List<Task>();
+            while (urls.Count < MaxPage && pending.Count > 0)
             {
-                string current = null;
-                foreach (string url in urls.Keys)
+                string url = pending.Dequeue();
+                try
                 {
-                    if ((bool)urls[url])
-                        continue;
-                    current = url;
-
+                    Task<String> task = Task.Run(()=>DownLoad(url));
+                    string html = task.Result;
+                    urls[url] = true;
+                    PageDownloaded(this, url);
+                    Parse(html, url);//解析,并加入新的链接
+                    tasks.Add(task);
                 }
-
-                if (current == null || count > 10) break;
-                //Console.WriteLine("爬行" + current + "頁面!");
-                string html = DownLoad(current); // 下载
-                urls[current] = true;
-                count++;
-                Parse(html);//解析,并加入新的链接
-                //Console.WriteLine("爬行結束");
+                catch (Exception ex)
+                {
+                    PageDownloaded(this, url);
+                }
+                Task.WaitAll(tasks.ToArray());
+                CrawlerStopped(this);
             }
         }
-
         public string DownLoad(string url)
         {
             try
@@ -75,7 +94,7 @@ namespace test12._0
                 string html = webClient.DownloadString(url);
 
                 //Console.WriteLine(url);
-                string fileName = count.ToString();
+                string fileName = urls.Count.ToString();
                 //Console.WriteLine(fileName);
                 File.WriteAllText(fileName, html, Encoding.UTF8);
                 return html;
@@ -87,68 +106,79 @@ namespace test12._0
             }
         }
 
-        private void Parse(string html)
+        private void Parse(string html, string pageUrl)
         {
-            string strRef = @"(href|HREF)[]*=[]*[""'][^""'#>]+[""']";
-            //string strRef2 = @"cnblogs";
-            string strRef3 = @"(html|HTML)+$";
-            MatchCollection matches = new Regex(strRef).Matches(html);
+            var matches = new Regex(urlDetectRegex).Matches(html);
+
 
             foreach (Match match in matches)
             {
+                string linkUrl = match.Groups["url"].Value;
+                if (linkUrl == null || linkUrl == "") continue;
+                linkUrl = Change(linkUrl, pageUrl);
 
-                strRef = match.Value.Substring(match.Value.IndexOf('=') + 1)
-                          .Trim('"', '\"', '#', '>');
                 //strRef = change(strRef);
 
                 //strRef = Path.GetFullPath(strRef);
 
                 //Console.WriteLine(strRef);
-                strRef = change(strRef);
-                if (!Regex.IsMatch(strRef, strRef3) )//|| !Regex.IsMatch(strRef, strRef2
+                Match linkUrlMatch = Regex.Match(linkUrl, urlParseRegex);
+                string host = linkUrlMatch.Groups["host"].Value;
+                string file = linkUrlMatch.Groups["file"].Value;
+                if (file == "") file = "index.html";
+
+                if (Regex.IsMatch(host, HostFilter) && Regex.IsMatch(file, FileFilter)
+                  && !urls.ContainsKey(linkUrl))
                 {
-
-                    continue;
+                    pending.Enqueue(linkUrl);
+                    urls.Add(linkUrl, false);
                 }
-
-
-
-                //if (!Regex.IsMatch(strRef, strRef3))
-                //    continue;
-                //Console.WriteLine(strRef);
-
-                if (strRef.Length == 0) continue;
-                if (urls[strRef] == null) urls[strRef] = false;
             }
         }
-        private string change(string str)
+        static private string Change(string str, string baseUrl)
         {
-            Regex regex;
+            if (str.Contains("://"))
+            {
+                return str;
+            }
+            if (str.StartsWith("//"))
+            {
+                return "http:" + str;
+            }
+            if (str.StartsWith("/"))
+            {
+                Match urlMatch = Regex.Match(baseUrl, urlParseRegex);
+                String site = urlMatch.Groups["site"].Value;
+                return site.EndsWith("/") ? site + str.Substring(1) : site + str;
+            }
 
-            if (str.StartsWith("http://"))
+            if (str.StartsWith("../"))
             {
-                regex = new Regex("http://");
-                str = regex.Replace(str, "https://");
-                return str;
+                str =str.Substring(3);
+                int idx = baseUrl.LastIndexOf('/');
+                return Change(str, baseUrl.Substring(0, idx));
             }
-            else if (Regex.IsMatch(str, "^[a-zA-Z]") && (!Regex.IsMatch(str, "https://")))
-            {
-                str = startUrl + str;
-                return str;
-            }
-            else if (Regex.IsMatch(str, "^/"))
-            {
 
-                str = startUrl.Substring(0, startUrl.Length - 1) + str;
-                return str;
-            }
-            else if (Regex.IsMatch(str, "^../"))
+            if (str.StartsWith("./"))
             {
-                regex = new Regex("^../");
-                str = regex.Replace(str, "/");
-                return startUrl.Substring(0, startUrl.Length - 1) + str;
+                return Change(str.Substring(2), baseUrl);
             }
-            return str;
+
+            int end = baseUrl.LastIndexOf("/");
+            return baseUrl.Substring(0, end) + "/" + str;
         }
+
+
+
+
+        //if (!Regex.IsMatch(strRef, strRef3))
+        //    continue;
+        //Console.WriteLine(strRef);
+
     }
-}
+    
+}   
+
+
+
+

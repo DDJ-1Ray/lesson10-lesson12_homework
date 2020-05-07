@@ -8,20 +8,34 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Threading;
-
+using System.Text.RegularExpressions;
 
 namespace test12._0
 {
     public partial class Form1 : Form
     {
         SimpleCrawler simpleCrawler = new SimpleCrawler();
+        Thread thread = null;
         public Form1()
         {
             InitializeComponent();
+            simpleCrawler.CrawlerStopped += SimpleCrawler_CrawlerStopped;
             simpleCrawler.PageDownloaded += SimpleCrawler_PageDownloaded;
 
         }
-        private void SimpleCrawler_PageDownloaded(string url)
+        private void SimpleCrawler_CrawlerStopped(SimpleCrawler obj)
+        {
+            Action action = () => label2.Text = "爬虫已停止";
+            if (this.InvokeRequired)
+            {
+                this.Invoke(action);
+            }
+            else
+            {
+                action();
+            }
+        }
+        private void SimpleCrawler_PageDownloaded(SimpleCrawler simpleCrawler1, string url)
         {
             if (this.showListBox.InvokeRequired)
             {
@@ -40,10 +54,22 @@ namespace test12._0
 
         private void startButton_Click(object sender, EventArgs e)
         {
-            simpleCrawler.StartUrl = urlTextBox.Text;
             showListBox.Items.Clear();
-            new Thread(simpleCrawler.Crawl).Start();
+            simpleCrawler.StartURL = urlTextBox.Text;
 
+            Match match = Regex.Match(simpleCrawler.StartURL, SimpleCrawler.urlParseRegex);
+            if (match.Length == 0) return;
+            string host = match.Groups["host"].Value;
+            simpleCrawler.HostFilter = "^" + host + "$";
+            simpleCrawler.FileFilter = ".html?$";
+
+            if (thread != null)
+            {
+                thread.Abort();
+            }
+            thread = new Thread(simpleCrawler.Start);
+            thread.Start();
+            label2.Text = "爬虫已启动....";
         }
     }
 }

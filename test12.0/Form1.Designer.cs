@@ -32,6 +32,7 @@
             this.label1 = new System.Windows.Forms.Label();
             this.startButton = new System.Windows.Forms.Button();
             this.showListBox = new System.Windows.Forms.ListBox();
+            this.label2 = new System.Windows.Forms.Label();
             this.SuspendLayout();
             // 
             // urlTextBox
@@ -69,11 +70,21 @@
             this.showListBox.Size = new System.Drawing.Size(438, 196);
             this.showListBox.TabIndex = 3;
             // 
+            // label2
+            // 
+            this.label2.AutoSize = true;
+            this.label2.Location = new System.Drawing.Point(156, 128);
+            this.label2.Name = "label2";
+            this.label2.Size = new System.Drawing.Size(33, 12);
+            this.label2.TabIndex = 4;
+            this.label2.Text = "label2";
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(734, 503);
+            this.Controls.Add(this.label2);
             this.Controls.Add(this.showListBox);
             this.Controls.Add(this.startButton);
             this.Controls.Add(this.label1);
@@ -91,6 +102,7 @@
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.Button startButton;
         private System.Windows.Forms.ListBox showListBox;
+        private System.Windows.Forms.Label label2;
     }
 }
 
